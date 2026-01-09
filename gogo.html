@@ -1,1 +1,1647 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>工程帳本 Ultimate Final v7.1</title>
+    <style>
+        /* --- 1. 核心變數 --- */
+        :root {
+            /* 主題色 RGB (預設抹茶綠) */
+            --theme-r: 86;
+            --theme-g: 158; --theme-b: 138;
+            --primary: rgb(var(--theme-r), var(--theme-g), var(--theme-b));
+            
+            --bg-std: #F8F9FA; 
+            --bg-card: #FFFFFF;
+            --text-main: #333333;
+            --text-sub: #888888;
+            --text-disabled: #BDBDBD;
+            --border: #EEEEEE;
+            --shadow: 0 4px 15px rgba(0,0,0,0.06);
+            
+            /* 較淺的紅色 (Danger) */
+            --danger: #FF6B6B;
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+        }
 
+        /* 深色模式變數 */
+        [data-mode="dark"] {
+            --bg-std: #121212;
+            --bg-card: #1E1E1E;
+            --text-main: #E0E0E0;
+            --text-sub: #A0A0A0;
+            --text-disabled: #555555;
+            --border: #333333;
+            --shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; }
+        
+        body { 
+            margin: 0;
+            background: var(--bg-std);
+            color: var(--text-main);
+            padding-bottom: calc(90px + var(--safe-bottom)); 
+            overflow-x: hidden; 
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        /* --- 2. 頂部導航 --- */
+        .app-header {
+            position: sticky;
+            top: 0; z-index: 50; 
+            background: rgba(var(--bg-card-rgb, 255,255,255), 0.8); 
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 10px 20px; display: flex; align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+        [data-mode="dark"] .app-header { background: rgba(30,30,30,0.8); }
+        
+        .date-trigger {
+            font-size: 1.4rem;
+            font-weight: 800; color: var(--text-main);
+            background: transparent; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;
+        }
+        .date-trigger::after { content: "▼"; font-size: 0.7rem; color: var(--text-sub); margin-top: 2px; }
+
+        .mode-toggle {
+            background: transparent;
+            border: 1px solid var(--border); 
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-main); cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page { display: none; padding: 15px; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card { background: var(--bg-card);
+            border-radius: 18px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); position: relative; border: 1px solid var(--border);
+        }
+
+        /* --- 3. 日曆系統 --- */
+        .cal-wrapper { touch-action: pan-y pinch-zoom; }
+        .grid-7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); width: 100%; }
+        
+        .week-header { 
+            text-align: center;
+            font-size: 0.8rem; color: var(--text-sub); 
+            padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+            white-space: nowrap;
+        }
+        
+        .day-cell {
+            min-height: 85px;
+            height: auto;
+            border-radius: 10px; padding: 2px; margin-bottom: 4px;
+            display: flex; flex-direction: column; align-items: center; 
+            border: 1px solid transparent; cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .day-num { 
+            font-size: 1rem;
+            font-weight: 500; margin-bottom: 3px; 
+            width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; 
+            border-radius: 50%; z-index: 2; flex-shrink: 0;
+        }
+        .day-cell.today .day-num { background: #E0E0E0; color: #333; font-weight: bold; } 
+        .is-weekend { color: var(--danger); }
+
+        .site-tag {
+            width: 95%;
+            max-width: 100%;
+            font-size: 10px; 
+            padding: 3px 6px; 
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 1.5px; 
+            text-align: center; font-weight: bold; line-height: 1.2;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* --- 4. 儀表板 & 列表 --- */
+        .dashboard-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .dash-card { 
+            flex: 1;
+            padding: 16px; border-radius: 18px; color: white; 
+            display: flex; flex-direction: column; justify-content: center; 
+            box-shadow: var(--shadow); cursor: pointer; position: relative; overflow: hidden;
+        }
+        .dash-card.left { background: #546E7A; }
+        .dash-card.right { background: #263238; }
+        .dash-label { font-size: 0.85rem; opacity: 0.9; margin-bottom: 4px; }
+        .dash-val { font-size: 1.5rem; font-weight: 800; letter-spacing: 0.5px; }
+
+        .worker-card { display: flex; justify-content: space-between; align-items: center; padding: 18px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .worker-card.disabled { color: var(--text-disabled); border-color: var(--border); }
+        .worker-card.disabled b { color: var(--text-disabled); } 
+        
+        /* --- 按鈕樣式 (漸層) --- */
+        .btn { 
+            width: 100%;
+            padding: 14px; border: none; border-radius: 14px; 
+            font-weight: 700; font-size: 16px; cursor: pointer; color: white; 
+            margin-top: 10px;
+            background: linear-gradient(135deg, var(--primary), rgba(var(--theme-r), var(--theme-g), var(--theme-b), 0.7));
+            box-shadow: 0 4px 12px rgba(var(--theme-r), var(--theme-g), var(--theme-b), 0.3); 
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn:active { transform: scale(0.97); }
+
+        .btn-danger { 
+            background: linear-gradient(135deg, #FF6B6B, #E53935);
+            box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3); 
+        }
+
+        .btn-hide { 
+            background: linear-gradient(135deg, #FF9999, #FF6B6B);
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3); 
+        }
+        
+        .btn-unhide {
+            background: linear-gradient(135deg, #78909C, #546E7A);
+            box-shadow: 0 4px 12px rgba(84, 110, 122, 0.3);
+        }
+
+        .btn-ghost { background: var(--bg-std); color: var(--text-sub); box-shadow: none; border: 1px solid var(--border); }
+        
+        .input-f { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 12px; font-size: 16px; margin-bottom: 12px; background: var(--bg-std); color: var(--text-main); outline: none; }
+        .input-f:focus { border-color: var(--primary); background: var(--bg-card); }
+
+        /* --- 5. 滾輪 & Picker --- */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000; display: none; opacity: 0;
+            transition: opacity 0.2s;
+            align-items: center; justify-content: center;
+        }
+        .picker-container {
+            position: fixed;
+            bottom: 0; width: 100%; background: var(--bg-card); z-index: 2100;
+            border-radius: 24px 24px 0 0; padding: 20px 0;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+        .picker-actions { display: flex; justify-content: space-between; padding: 0 24px 15px; font-weight: 600; font-size: 1rem; color: var(--text-main); }
+        .picker-body { 
+            height: 220px;
+            display: flex; position: relative; overflow: hidden; 
+            mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent); 
+        }
+        .picker-col { flex: 1; overflow-y: scroll; scroll-snap-type: y mandatory; text-align: center; padding: 90px 0; }
+        .picker-col::-webkit-scrollbar { display: none; }
+        .picker-item { height: 40px; line-height: 40px; scroll-snap-align: center; font-size: 1.1rem; color: var(--text-sub); transition: all 0.1s; }
+        .picker-item.active { color: var(--text-main); font-size: 1.5rem; font-weight: 800; transform: scale(1.1); }
+        .picker-highlight { position: absolute; top: 50%; left: 0; width: 100%; height: 40px; margin-top: -20px; background: rgba(128,128,128,0.05); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); pointer-events: none; }
+
+        /* --- 6. Modal (修改版: 固定關閉按鈕) --- */
+        .modal-box {
+            background: var(--bg-card);
+            width: 88%; max-width: 380px; max-height: 85vh;
+            border-radius: 24px; 
+            position: relative;
+            transform: scale(0.95); transition: transform 0.2s;
+            display: flex; 
+            flex-direction: column;
+            overflow: hidden; /* 防止外層捲動 */
+        }
+        .modal-header {
+            padding: 15px 15px 5px 15px;
+            flex-shrink: 0;
+            display: flex; justify-content: flex-end; /* 按鈕靠右 */
+        }
+        .modal-content-scroll {
+            padding: 0 24px 24px 24px;
+            overflow-y: auto; /* 內容在此捲動 */
+            flex: 1;
+        }
+        .modal-close { 
+            width: 30px; height: 30px; 
+            display:flex; align-items:center; justify-content:center; 
+            background: var(--bg-std); border-radius:50%; color: var(--text-sub); cursor:pointer;
+        }
+        
+        .quick-site-row {
+            display: flex;
+            justify-content: space-between; align-items: center;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 12px; margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            cursor: pointer; transition: background 0.1s;
+        }
+        .quick-site-row:active { background: var(--bg-std); }
+
+        /* --- 7. 設定 & 主題球 --- */
+        .theme-grid { 
+            display: grid;
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 8px;
+            margin: 15px 0; justify-items: center;
+        }
+        .theme-dot { 
+            width: 100%;
+            aspect-ratio: 1; 
+            border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent; 
+            transition: transform 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .theme-dot.active { transform: scale(1.15); border-color: var(--text-main); }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0; width: 100%; height: calc(70px + var(--safe-bottom));
+            background: var(--bg-card); border-top: 1px solid var(--border); display: flex; justify-content: space-around;
+            padding-bottom: var(--safe-bottom);
+            z-index: 100;
+        }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-sub); font-size: 10px; transition: color 0.2s; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        .nav-item svg { width: 26px; height: 26px; margin-bottom: 4px; fill: currentColor; }
+
+        .icon-svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .icon-svg-sm { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+        .chk-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 5px; border-bottom: 1px dashed var(--border); }
+        .chk-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary); }
+        .chk-row.disabled-row { color: var(--text-disabled); }
+
+        .fab-btn {
+            position: fixed;
+            bottom: calc(85px + var(--safe-bottom)); right: 20px;
+            width: 56px; height: 56px; border-radius: 50%;
+            background: #263238; color: white; border: none;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25); 
+            display: flex; align-items: center; justify-content: center; z-index: 90;
+        }
+        
+        /* 個人日曆樣式 */
+        .p-cal-row {
+            display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);
+        }
+        .p-cal-date {
+            width: 50px; font-weight: bold; text-align: center;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .p-cal-content { flex: 1; font-size: 0.9rem; }
+        .p-cal-site { margin-bottom: 4px; }
+        .p-cal-extra { color: var(--text-sub); font-size: 0.85rem; margin-top: 2px; }
+
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <button class="date-trigger" onclick="openDatePicker()">
+            <span id="dispYear">2026</span>年 <span id="dispMonth">1</span>月
+        </button>
+        <button class="mode-toggle" onclick="toggleDarkMode()">
+            <svg class="icon-svg" id="iconMoon" style="display:block" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            <svg class="icon-svg" id="iconSun" style="display:none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+    </header>
+
+    <main>
+        <section id="tab-cal" class="page active">
+            <div class="card cal-wrapper" id="calWrapper">
+                <div class="grid-7">
+                    <div class="week-header is-weekend">日</div><div class="week-header">一</div><div class="week-header">二</div><div class="week-header">三</div><div class="week-header">四</div><div class="week-header">五</div><div class="week-header is-weekend">六</div>
+                </div>
+                <div id="calendarGrid" class="grid-7"></div>
+            </div>
+        </section>
+
+        <section id="tab-work" class="page">
+            <div class="dashboard-row">
+                <div class="dash-card left" onclick="openPaymentModal()">
+                    <div class="dash-label">案場管理</div>
+                    <div class="dash-val">查看</div>
+                </div>
+                <div class="dash-card right">
+                    <div class="dash-label">本月總薪資</div>
+                    <div class="dash-val" id="totalExp">$0</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <svg class="icon-svg" style="color:var(--text-sub)" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="wSearch" class="input-f" style="margin:0; border:none; background:transparent;" placeholder="搜尋師傅..." oninput="renderWorkerList()">
+                    <div onclick="openSiteSelect()" style="padding:8px; cursor:pointer; color:var(--text-sub)">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    </div>
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); padding-top:10px;">
+                    <svg class="icon-svg" style="color:var(--text-sub)" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <input type="date" id="wDateFilter" class="input-f" style="margin:0; border:none; background:transparent; padding:0;" onchange="renderWorkerList()">
+                    <div id="btnDateReset" onclick="resetDateFilter()" style="display:none; padding:5px; cursor:pointer; color:var(--text-sub);">
+                        <svg class="icon-svg-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </div>
+                </div>
+                <div style="height:1px; background:var(--border); margin:10px 0;"></div>
+                <button class="btn" style="margin-top:0" onclick="openWorkerModal()">+ 新增師傅</button>
+            </div>
+
+            <div id="workerList"></div>
+            <button class="fab-btn" onclick="openMultiExtra()">
+                <svg class="icon-svg" style="width:28px;height:28px" viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path></svg>
+            </button>
+        </section>
+
+        <section id="tab-set" class="page">
+            <div class="card">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="8" rx="2"></rect><path d="M6 11v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"></path><path d="M12 15v6"></path><path d="M9 21h6"></path></svg>
+                    <h3>主題顏色</h3>
+                </div>
+                <div class="theme-grid" id="themeBox"></div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+                    <h3>雲端資料庫</h3>
+                </div>
+                <div class="chk-row">
+                       <span style="display:flex;align-items:center;gap:5px"><svg class="icon-svg-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> 鎖定網址</span>
+                    <input type="checkbox" id="gasLock" onchange="toggleGasLock()">
+                </div>
+                <input id="gasUrl" class="input-f" placeholder="Google Apps Script URL">
+                <div id="syncStatus" style="font-size:0.8rem; color:var(--text-sub); text-align:right;"></div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; color:var(--danger)">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <h3>危險操作</h3>
+                </div>
+                <button class="btn btn-danger" onclick="masterReset()" style="display:flex;align-items:center;justify-content:center;gap:10px">
+                    <svg class="icon-svg" viewBox="0 0 24 24" style="color:white"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    重置所有資料
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" id="nav-cal" onclick="switchPage('cal')">
+            <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10z"/></svg>
+            日曆
+        </div>
+          <div class="nav-item" id="nav-work" onclick="switchPage('work')">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            人員
+        </div>
+        <div class="nav-item" id="nav-set" onclick="switchPage('set')">
+              <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.04.17 0 .34.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.04-.22 0-.45-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            設定
+        </div>
+    </nav>
+
+    <div id="pickerOverlay" class="overlay" onclick="closePicker()">
+        <div id="modalDatePicker" class="picker-container" onclick="event.stopPropagation()">
+              <div class="picker-actions">
+                <span style="color:var(--text-sub); cursor:pointer;" onclick="closePicker()">取消</span>
+                <span style="color:var(--text-sub); font-weight:400">選擇月份</span>
+                <span style="color:var(--primary); cursor:pointer;" onclick="confirmDate()">確定</span>
+            </div>
+            <div class="picker-body">
+                <div class="picker-highlight"></div>
+                <div id="wheelY" class="picker-col"></div>
+                <div id="wheelM" class="picker-col"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalQuickAdd" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalQuickAdd')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3 id="quickDateTitle" style="margin-top:0; margin-bottom:15px;"></h3>
+                <button class="btn" style="margin-bottom:15px;" onclick="openSiteModal(null)">+ 新增案場</button>
+                <div style="font-size:0.85rem; color:var(--text-sub); margin-bottom:8px;">或複製本月曾經新增過的案場：</div>
+                <div id="quickSiteList" style="max-height:200px; overflow-y:auto;"></div>
+                <hr style="border-top:1px dashed var(--border); margin:15px 0;">
+                <div style="font-size:0.85rem; color:var(--text-main); font-weight:bold; margin-bottom:8px;">當日已安排：</div>
+                <div id="dayExistList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalSite" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalSite')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>案場設定</h3>
+                <input id="sId" type="hidden">
+                <input id="sDate" type="hidden">
+                <input id="sName" class="input-f" placeholder="案場名稱">
+                
+                <div id="sColorBox" class="theme-grid" style="margin-bottom:15px"></div>
+
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px">
+                    <b>上工師傅</b>
+                    <input id="sWorkerFilter" style="padding:4px; font-size:12px; width:100px; border:1px solid var(--border); border-radius:6px; background:var(--bg-std); color:var(--text-main)" placeholder="搜尋..." oninput="renderSiteWorkerSelect()">
+                </div>
+                <div id="sWorkerList" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); padding:10px; border-radius:10px; margin-bottom:15px;"></div>
+
+                <button class="btn" onclick="saveSite()">儲存</button>
+                <button id="btnDelSite" class="btn btn-danger" style="margin-top:10px; display:none;" onclick="delSite()">刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalWorker" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalWorker')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>師傅資料</h3>
+                <input id="wId" type="hidden">
+                
+                <div class="chk-row">
+                    <span style="display:flex;align-items:center;gap:5px"><svg class="icon-svg-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> 置頂顯示</span>
+                    <input type="checkbox" id="wTop">
+                </div>
+                <input id="wName" class="input-f" placeholder="姓名">
+                <input id="wRate" type="number" class="input-f" placeholder="標準日薪">
+                <input id="wPhone" class="input-f" placeholder="聯絡電話">
+                <textarea id="wNote" class="input-f" placeholder="備註..." style="height:60px"></textarea>
+                
+                <div id="wStatsBlock" style="display:none; background:var(--bg-std); padding:12px; border-radius:12px; margin-bottom:15px; cursor:pointer" onclick="openPersonalCalendar(document.getElementById('wId').value)">
+                    <div style="font-size:0.9rem; font-weight:bold; margin-bottom:5px; display:flex; justify-content:space-between;">
+                        <span>本月薪資</span>
+                        <span style="font-size:0.8rem; color:var(--primary)">查看日曆 ></span>
+                    </div>
+                    
+                    <div style="font-size:0.85rem; color:var(--text-sub); margin-bottom:5px;">
+                        <span style="color:var(--text-sub)">工日：</span><span id="wWorkDatesStr" style="color:var(--text-sub)"></span>
+                    </div>
+
+                    <div style="font-size:0.85rem; color:var(--text-sub); line-height:1.6">
+                        工天：<span id="wWorkDays">0</span> 天<br>
+                        工資：$<span id="wWorkPay">0</span> (依上工日薪資)<br>
+                        雜費：$<span id="wExtraTotal">0</span>
+                    </div>
+                    <div style="border-top:1px solid var(--border); margin-top:5px; padding-top:5px; font-weight:800; font-size:1.1rem; text-align:right;">
+                        總計：$<span id="wFinalPay">0</span>
+                    </div>
+                </div>
+
+                <div id="wExtraBlock" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <b>個人雜費</b>
+                        <button class="btn-ghost" style="padding:4px 8px; font-size:12px; margin:0;" onclick="toggleAddExtra()">+ 新增</button>
+                    </div>
+                    <div id="addExtraBox" style="display:none; background:rgba(var(--theme-r),var(--theme-g),var(--theme-b),0.1); padding:10px; border-radius:8px; margin-bottom:10px;">
+                        <input id="exDate" type="date" class="input-f" style="margin-bottom:5px">
+                        <input id="exName" class="input-f" placeholder="項目" style="margin-bottom:5px">
+                        <input id="exAmt" type="number" class="input-f" placeholder="金額" style="margin-bottom:5px">
+                        <button id="btnAddExtraAction" class="btn" style="padding:8px; font-size:14px; margin:0;" onclick="saveOneExtra()">加入</button>
+                    </div>
+                    <div id="wExtraList" style="max-height:120px; overflow-y:auto; border:1px solid var(--border); padding:5px;"></div>
+                </div>
+
+                <button class="btn" onclick="saveWorker()">儲存</button>
+                <div id="wActionBtns" style="display:none; gap:10px; margin-top:10px;">
+                     <button class="btn btn-hide" onclick="toggleHideWorker()" style="margin-top:0">隱藏</button>
+                     <button class="btn btn-danger" onclick="hardDeleteWorker()" style="margin-top:0">刪除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalPersonalCal" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalPersonalCal')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>個人上工日曆</h3>
+                <h4 id="pcTitle" style="color:var(--text-sub); margin-top:0"></h4>
+                <div id="pcList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalExtraDetail" class="overlay">
+        <div class="modal-box">
+             <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalExtraDetail')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3 id="edTitle">雜費細項</h3>
+                <div id="edList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalSiteSelect" class="overlay">
+         <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalSiteSelect')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>選擇本月案場</h3>
+                <div style="font-size:0.85rem; color:var(--text-sub); margin-bottom:10px;">點擊以篩選參與該案場的師傅</div>
+                <div id="ssList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalMultiExtra" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalMultiExtra')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>多人添加雜費</h3>
+         
+                <input id="meDate" type="date" class="input-f">
+                <input id="meName" class="input-f" placeholder="項目">
+                <input id="meAmt" type="number" class="input-f" placeholder="金額">
+                
+                <div style="margin:10px 0;">
+                    <input id="meFilter" class="input-f" placeholder="搜尋師傅..." oninput="renderMeList()">
+                </div>
+     
+                <div id="meList" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); padding:10px; border-radius:10px;"></div>
+                
+                <button class="btn" onclick="saveMultiExtra()">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalPayment" class="overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-close" onclick="closeModal('modalPayment')">
+                    <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                 </div>
+            </div>
+            <div class="modal-content-scroll">
+                <h3>案場請款管理</h3>
+                <div style="font-size:0.8rem; color:var(--text-sub); margin-bottom:10px;">* 同名稱案場自動合併</div>
+                
+                <div id="payList" style="max-height:280px; overflow-y:auto; margin-bottom:10px;"></div>
+                
+                <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:5px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-weight:bold; font-size:1.1rem;">
+                        <span>本月請款總計:</span>
+                        <span id="payTotalDisplay">$0</span>
+                    </div>
+                    <textarea id="payNote" class="input-f" style="height:60px;" placeholder="本月請款備註..."></textarea>
+                </div>
+
+                <button class="btn" onclick="closeModal('modalPayment')">關閉</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+/* --- 系統核心邏輯 --- */
+const THEMES = [
+    { r:86,  g:158, b:138, hex:'#569E8A' }, // Sage Green
+    { r:234, g:193, b:80,  hex:'#EAC150' }, // Mustard Yellow
+    { r:90,  g:179, b:194, hex:'#5AB3C2' }, // Sky Blue
+    { r:240, g:141, b:166, hex:'#F08DA6' }, // Rose Pink
+    { r:157, g:131, b:180, hex:'#9D83B4' }, // Lavender Purple
+    { r:224, g:112, b:111, hex:'#E0706F' }, // Coral Red
+    { r:106, g:133, b:209, hex:'#6A85D1' }  // Lighter Royal Blue
+];
+
+let db = {
+    workers: [], sites: [], extras: [], payments: [], 
+    paymentMeta: {}, 
+    savedPayAmts: {}, 
+    settings: { theme: 0, gasUrl: '', gasLock: false, darkMode: false }
+};
+let editingExtraId = null; 
+let curDate = new Date();
+let selectedDateStr = "";
+
+// [Request 4] 案場篩選變數
+let filterSiteName = null;
+
+window.onload = async () => {
+    const local = localStorage.getItem('ENG_LEDGER_FINAL_V7');
+    if(local) db = JSON.parse(local);
+    if(!db.savedPayAmts) db.savedPayAmts = {};
+    
+    applyTheme(db.settings.theme);
+    if(db.settings.darkMode) toggleDarkMode(true);
+    renderPickerWheels();
+    updateHeaderDate();
+    
+    switchPage('cal'); 
+    initGestures();
+    if(db.settings.gasUrl) {
+        document.getElementById('gasUrl').value = db.settings.gasUrl;
+        document.getElementById('gasLock').checked = db.settings.gasLock;
+        toggleGasLock();
+        await syncCloud(true);
+    }
+};
+
+function saveDB() {
+    localStorage.setItem('ENG_LEDGER_FINAL_V7', JSON.stringify(db));
+    syncCloud(false);
+}
+
+async function syncCloud(isPull) {
+    const url = db.settings.gasUrl;
+    const status = document.getElementById('syncStatus');
+    if(!url) return;
+    status.innerText = "同步中...";
+    try {
+        if(isPull) {
+            const res = await fetch(url);
+            const data = await res.json();
+            if(data.workers) { 
+                db = data;
+                if(!db.savedPayAmts) db.savedPayAmts = {};
+                renderAll();
+            }
+        } else {
+            await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(db) });
+        }
+        status.innerText = "已同步 " + new Date().toLocaleTimeString();
+    } catch(e) { status.innerText = "同步失敗"; }
+}
+
+function renderAll() {
+    if(document.getElementById('tab-cal').classList.contains('active')) renderCalendar();
+    if(document.getElementById('tab-work').classList.contains('active')) renderWorkerList();
+    if(document.getElementById('tab-set').classList.contains('active')) renderThemeGrid();
+    renderSiteColorBox();
+}
+
+/* --- 深色模式 --- */
+function toggleDarkMode(forceState) {
+    const isDark = typeof forceState === 'boolean' ?
+    forceState : !document.body.hasAttribute('data-mode');
+    
+    if (isDark) {
+        document.body.setAttribute('data-mode', 'dark');
+        document.getElementById('iconMoon').style.display = 'none';
+        document.getElementById('iconSun').style.display = 'block';
+    } else {
+        document.body.removeAttribute('data-mode');
+        document.getElementById('iconMoon').style.display = 'block';
+        document.getElementById('iconSun').style.display = 'none';
+    }
+    
+    db.settings.darkMode = isDark;
+    if(typeof forceState !== 'boolean') {
+        saveDB();
+        if(document.getElementById('tab-cal').classList.contains('active')) {
+             switchPage('cal');
+        }
+    }
+}
+
+/* --- 手勢 (Swipe) --- */
+function initGestures() {
+    const cal = document.getElementById('calWrapper');
+    let startX = 0;
+    cal.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive: true});
+    cal.addEventListener('touchend', e => {
+        let diff = e.changedTouches[0].clientX - startX;
+        if(Math.abs(diff) > 50) {
+            if(diff > 0) changeMonth(-1);
+            else changeMonth(1);
+        }
+    });
+}
+function changeMonth(dir) {
+    curDate.setMonth(curDate.getMonth() + dir);
+    updateHeaderDate();
+    renderCalendar();
+}
+
+/* --- 日曆邏輯 --- */
+function updateHeaderDate() {
+    document.getElementById('dispYear').innerText = curDate.getFullYear();
+    document.getElementById('dispMonth').innerText = curDate.getMonth() + 1;
+}
+
+function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = "";
+    
+    const y = curDate.getFullYear();
+    const m = curDate.getMonth();
+    const firstDay = new Date(y, m, 1).getDay();
+    const daysInM = new Date(y, m+1, 0).getDate();
+    const today = new Date();
+    
+    for(let i=0; i<firstDay; i++) grid.appendChild(document.createElement('div'));
+    for(let d=1; d<=daysInM; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+        const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const dayOfWeek = new Date(y, m, d).getDay();
+        const isToday = today.getFullYear() === y && today.getMonth() === m && today.getDate() === d;
+        
+        if (isToday) cell.classList.add('today');
+        let numHtml = `<div class="day-num ${dayOfWeek===0||dayOfWeek===6 ? 'is-weekend':''}">${d}</div>`;
+        
+        const daySites = db.sites.filter(s => s.date === dateStr);
+        let tagsHtml = '';
+        daySites.forEach(s => {
+            const c = THEMES[s.colorIdx || 0].hex;
+            tagsHtml += `<div class="site-tag" style="background:${c}">${s.name}</div>`;
+        });
+        cell.innerHTML = numHtml + tagsHtml;
+        cell.onclick = () => openQuickAdd(dateStr);
+        grid.appendChild(cell);
+    }
+    
+    setTimeout(resizeTags, 10);
+}
+
+function resizeTags() {
+    document.querySelectorAll('.site-tag').forEach(el => {
+        let size = 11;
+        el.style.fontSize = size + 'px';
+        while (el.scrollWidth > el.clientWidth && size > 8) {
+            size--;
+            el.style.fontSize = size + 'px';
+        }
+    });
+}
+
+/* --- Quick Add Logic --- */
+function openQuickAdd(dateStr) {
+    selectedDateStr = dateStr;
+    document.getElementById('quickDateTitle').innerText = dateStr;
+    const daySites = db.sites.filter(s => s.date === dateStr);
+    const dayList = document.getElementById('dayExistList');
+    dayList.innerHTML = "";
+    daySites.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'quick-site-row';
+        row.style.background = 'rgba(255, 107, 107, 0.1)'; 
+        row.innerHTML = `<span style="font-weight:bold">${s.name} (${s.workers.length}人)</span> <span style="color:var(--danger);font-weight:bold" onclick="event.stopPropagation();delSite('${s.id}')">刪除</span>`;
+        row.onclick = () => openSiteModal(s.id);
+        dayList.appendChild(row);
+    });
+    const ym = dateStr.slice(0, 7);
+    const monthSites = db.sites.filter(s => s.date.startsWith(ym));
+    const uniqueMap = new Map();
+    monthSites.forEach(s => uniqueMap.set(s.name, s));
+    const quickList = document.getElementById('quickSiteList');
+    quickList.innerHTML = "";
+    
+    uniqueMap.forEach((s, name) => {
+        const row = document.createElement('div');
+        row.className = 'quick-site-row';
+        const c = THEMES[s.colorIdx || 0].hex;
+        row.innerHTML = `<span style="display:flex;align-items:center"><div style="width:10px;height:10px;border-radius:50%;background:${c};margin-right:8px"></div>${name}</span> <span>+</span>`;
+        row.onclick = () => cloneSiteAndEdit(s, dateStr);
+        quickList.appendChild(row);
+    });
+    if(uniqueMap.size === 0) quickList.innerHTML = "<div style='text-align:center;color:var(--text-sub);padding:10px'>本月尚無其他案場</div>";
+    openModal('modalQuickAdd');
+}
+
+function cloneSiteAndEdit(templateSite, targetDate) {
+    const newSite = {
+        id: 's' + Date.now(),
+        date: targetDate,
+        name: templateSite.name,
+        colorIdx: templateSite.colorIdx,
+        workers: [] 
+    };
+    db.sites.push(newSite);
+    saveDB();
+    closeModal('modalQuickAdd');
+    renderCalendar();
+    setTimeout(() => openSiteModal(newSite.id), 200); 
+}
+
+/* --- iOS 滾輪 --- */
+function renderPickerWheels() {
+    const wy = document.getElementById('wheelY');
+    const wm = document.getElementById('wheelM');
+    
+    if(wy.children.length > 0) return;
+    for(let i=2020; i<=2035; i++) {
+        const div = document.createElement('div');
+        div.className = 'picker-item';
+        div.innerText = i + '年'; div.dataset.val = i;
+        wy.appendChild(div);
+    }
+    for(let i=1; i<=12; i++) {
+        const div = document.createElement('div');
+        div.className = 'picker-item'; div.innerText = i + '月'; div.dataset.val = i;
+        wm.appendChild(div);
+    }
+    [wy, wm].forEach(el => el.addEventListener('scroll', updatePickerFocus));
+}
+
+function updatePickerFocus(e) {
+    const el = e.target;
+    const center = el.scrollTop + 110; 
+    let minDiff = Infinity;
+    let closestItem = null;
+    el.querySelectorAll('.picker-item').forEach(it => {
+        const itemCenter = it.offsetTop + it.offsetHeight / 2;
+        const diff = Math.abs(center - itemCenter);
+        if(diff < minDiff) {
+            minDiff = diff;
+            closestItem = it;
+        }
+    });
+    el.querySelectorAll('.picker-item').forEach(it => it.classList.remove('active'));
+    if(closestItem) closestItem.classList.add('active');
+}
+
+function openDatePicker() {
+    const el = document.getElementById('modalDatePicker');
+    const overlay = document.getElementById('pickerOverlay');
+    el.style.transform = 'translateY(0)';
+    overlay.style.display = 'flex';
+    setTimeout(()=>overlay.style.opacity=1, 10);
+    
+    setTimeout(() => {
+        const wy = document.getElementById('wheelY');
+        const wm = document.getElementById('wheelM');
+        const yItem = [...wy.children].find(c => c.dataset.val == curDate.getFullYear());
+        const mItem = [...wm.children].find(c => c.dataset.val == curDate.getMonth()+1);
+        if(yItem) wy.scrollTop = yItem.offsetTop - 90;
+        if(mItem) wm.scrollTop = mItem.offsetTop - 90;
+    }, 100);
+}
+
+function closePicker() {
+    const el = document.getElementById('modalDatePicker');
+    const overlay = document.getElementById('pickerOverlay');
+    el.style.transform = 'translateY(100%)';
+    overlay.style.opacity=0;
+    setTimeout(()=>overlay.style.display='none', 200);
+}
+
+function confirmDate() {
+    const yEl = document.querySelector('#wheelY .active');
+    const mEl = document.querySelector('#wheelM .active');
+    if(yEl && mEl) {
+        curDate.setFullYear(parseInt(yEl.dataset.val));
+        curDate.setMonth(parseInt(mEl.dataset.val)-1);
+        updateHeaderDate();
+        renderCalendar();
+        
+        // 切換月份時，清空案場篩選
+        filterSiteName = null;
+        
+        if(document.getElementById('tab-work').classList.contains('active')) renderWorkerList();
+        if(document.getElementById('tab-cal').classList.contains('active')) switchPage('cal');
+    }
+    closePicker();
+}
+
+/* --- 案場請款 --- */
+function openPaymentModal() {
+    const list = document.getElementById('payList');
+    list.innerHTML = "";
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const monthSites = db.sites.filter(s => s.date.startsWith(ym));
+    const uniqueNames = [...new Set(monthSites.map(s => s.name))];
+    let totalAmt = 0;
+
+    uniqueNames.forEach(name => {
+        const sitesWithName = monthSites.filter(s => s.name === name);
+        const repId = sitesWithName[0].id;
+        
+        const existingPay = db.payments.find(p => p.siteId === repId);
+        const isPaid = !!existingPay;
+        
+        let displayAmount = '';
+        if (existingPay) {
+             displayAmount = existingPay.amount || '';
+        } else {
+            displayAmount = db.savedPayAmts[repId] || '';
+        }
+        
+        if(isPaid && displayAmount) totalAmt += parseInt(displayAmount);
+
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.padding = '12px';
+        div.style.marginBottom = '8px';
+        div.style.display = 'flex'; 
+        div.style.justifyContent='space-between'; 
+        div.style.alignItems='center';
+        div.style.borderLeft = isPaid ? '5px solid #ccc' : '5px solid ' + THEMES[db.settings.theme].hex;
+        
+        div.innerHTML = `
+            <b style="flex:1">${name}</b> 
+            <div style="display:flex;align-items:center;gap:10px">
+                <input type="number" class="input-f" style="margin:0;padding:8px;width:80px;text-align:right" 
+                    placeholder="$" value="${displayAmount}" 
+                    oninput="updatePayAmount('${repId}', this.value)" onclick="event.stopPropagation()">
+                <input type="checkbox" style="width:22px;height:22px;accent-color:var(--primary);cursor:pointer" 
+                    ${isPaid?'checked':''} 
+                    onchange="toggleGroupPay('${name}', '${repId}', this)">
+            </div>
+        `;
+        list.appendChild(div);
+    });
+
+    if(uniqueNames.length === 0) list.innerHTML = "<div style='text-align:center;color:var(--text-sub)'>本月無案場</div>";
+    
+    document.getElementById('payTotalDisplay').innerText = `$${totalAmt.toLocaleString()}`;
+    
+    const noteArea = document.getElementById('payNote');
+    noteArea.value = db.paymentMeta && db.paymentMeta[ym] ? db.paymentMeta[ym] : "";
+    noteArea.onchange = () => {
+        if(!db.paymentMeta) db.paymentMeta = {};
+        db.paymentMeta[ym] = noteArea.value;
+        saveDB();
+    };
+
+    openModal('modalPayment');
+}
+
+function updatePayAmount(repId, val) {
+    db.savedPayAmts[repId] = val;
+    const idx = db.payments.findIndex(p => p.siteId === repId);
+    if(idx !== -1) {
+        db.payments[idx].amount = val;
+    }
+    saveDB();
+    
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const monthSites = db.sites.filter(s => s.date.startsWith(ym));
+    const monthRepIds = [...new Set(monthSites.map(s=>s.name))].map(n => monthSites.find(s=>s.name===n).id);
+    
+    let total = 0;
+    db.payments.forEach(p => {
+         if(monthRepIds.includes(p.siteId)) total += Number(p.amount||0);
+    });
+    document.getElementById('payTotalDisplay').innerText = `$${total.toLocaleString()}`;
+}
+
+function toggleGroupPay(name, repId, checkbox) {
+    const isChecked = checkbox.checked;
+    if (!isChecked) {
+        if (!confirm("確定要取消「已請款」狀態嗎？")) {
+            checkbox.checked = true;
+            return;
+        }
+    }
+
+    if(isChecked) {
+        const amount = db.savedPayAmts[repId] || '';
+        if(!db.payments.some(p => p.siteId === repId)) {
+            db.payments.push({ siteId: repId, date: new Date().toISOString(), amount: amount });
+        }
+    } else {
+        db.payments = db.payments.filter(p => p.siteId !== repId);
+    }
+    
+    saveDB(); openPaymentModal();
+}
+
+/* --- 案場編輯 --- */
+function openSiteModal(siteId) {
+    closeModal('modalQuickAdd');
+    openModal('modalSite');
+    
+    const s = siteId ?
+    db.sites.find(x => x.id === siteId) : { id: '', name: '', colorIdx: 0, workers: [] };
+    
+    document.getElementById('sId').value = s.id;
+    document.getElementById('sDate').value = selectedDateStr;
+    document.getElementById('sName').value = s.name;
+    document.getElementById('btnDelSite').style.display = siteId ? 'block' : 'none';
+    
+    renderSiteColorBox(s.colorIdx);
+    renderSiteWorkerSelect(s.workers);
+}
+
+function renderSiteWorkerSelect(currentWorkers = []) {
+    const filter = document.getElementById('sWorkerFilter').value.toLowerCase();
+    const list = document.getElementById('sWorkerList');
+    list.innerHTML = "";
+    const currentIds = currentWorkers.map(w => w.id);
+    
+    // 計算工天 (與 Personnel 邏輯一致)
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const workersWithStats = db.workers.map(w => {
+        const monthSites = db.sites.filter(s => s.date.startsWith(ym) && s.workers.some(sw => sw.id === w.id));
+        return { ...w, daysCount: monthSites.length };
+    });
+    // 排序：置頂 -> 工天多到少 -> 隱藏
+    workersWithStats.sort((a,b) => {
+        if (a.isTop !== b.isTop) return (b.isTop?1:0) - (a.isTop?1:0);
+        if (a.isDisabled !== b.isDisabled) return (a.isDisabled?1:0) - (b.isDisabled?1:0);
+        return b.daysCount - a.daysCount;
+    });
+    workersWithStats.forEach(w => {
+        if (w.isDisabled && !currentIds.includes(w.id)) return;
+
+        if(w.name.toLowerCase().includes(filter)) {
+            const row = document.createElement('div');
+            row.className = 'chk-row';
+            if(w.isDisabled) row.classList.add('disabled-row');
+            
+            const star = w.isTop ? '<svg class="icon-svg-sm" viewBox="0 0 24 24" style="fill:gold;color:gold;margin-right:2px;vertical-align:text-bottom"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>' : '';
+            const nameDisplay = w.isDisabled ? `${w.name} (隱藏)` : w.name;
+            
+            row.innerHTML = `<span>${star}${nameDisplay}</span> <input type="checkbox" value="${w.id}" ${currentIds.includes(w.id)?'checked':''}>`;
+            list.appendChild(row);
+        }
+    });
+}
+
+function saveSite() {
+    const id = document.getElementById('sId').value;
+    const date = document.getElementById('sDate').value;
+    const name = document.getElementById('sName').value;
+    if(!name) return alert("請輸入名稱");
+    
+    const activeDot = document.querySelector('#sColorBox .active');
+    const colorIdx = activeDot ? parseInt(activeDot.dataset.idx) : 0;
+    const chks = document.querySelectorAll('#sWorkerList input:checked');
+    const selectedIds = Array.from(chks).map(c => c.value);
+    
+    const oldSite = id ?
+    db.sites.find(s => s.id === id) : null;
+    const newWorkers = selectedIds.map(wid => {
+        const exist = oldSite?.workers.find(w => w.id === wid);
+        if(exist) return exist; 
+        const master = db.workers.find(w => w.id === wid);
+        return { id: wid, snapshotRate: master ? (Number(master.rate)||0) : 0 };
+    });
+    const data = { id: id || 's'+Date.now(), date, name, colorIdx, workers: newWorkers };
+    if(id) {
+        const idx = db.sites.findIndex(x => x.id === id);
+        db.sites[idx] = data;
+    } else db.sites.push(data);
+    
+    saveDB(); closeModal('modalSite'); renderCalendar();
+}
+
+function delSite(id) {
+    if(!id) id = document.getElementById('sId').value;
+    if(confirm('確定刪除？')) {
+        db.sites = db.sites.filter(x => x.id !== id);
+        db.payments = db.payments.filter(p => p.siteId !== id);
+        saveDB(); closeModal(null); renderCalendar();
+    }
+}
+
+/* --- [Request 4] 案場篩選 Modal --- */
+function openSiteSelect() {
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    // 找出本月所有案場
+    const monthSites = db.sites.filter(s => s.date.startsWith(ym));
+    // 取唯一名稱
+    const uniqueNames = [...new Set(monthSites.map(s => s.name))];
+    
+    const list = document.getElementById('ssList');
+    list.innerHTML = "";
+    
+    if(uniqueNames.length === 0) {
+        list.innerHTML = "<div style='text-align:center;color:var(--text-sub);padding:10px'>本月尚無案場</div>";
+    } else {
+        // 加入「取消篩選」選項
+        const resetItem = document.createElement('div');
+        resetItem.className = 'quick-site-row';
+        resetItem.innerHTML = `<span style="color:var(--text-sub)">不篩選 (顯示全部)</span>`;
+        resetItem.onclick = () => { filterSiteName = null; closeModal('modalSiteSelect'); renderWorkerList(); };
+        list.appendChild(resetItem);
+
+        uniqueNames.forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'quick-site-row';
+            // 找一個代表色
+            const repSite = monthSites.find(s => s.name === name);
+            const c = THEMES[repSite.colorIdx||0].hex;
+            div.innerHTML = `<span style="display:flex;align-items:center"><div style="width:10px;height:10px;border-radius:50%;background:${c};margin-right:8px"></div>${name}</span>`;
+            div.onclick = () => { filterSiteName = name; closeModal('modalSiteSelect'); renderWorkerList(); };
+            list.appendChild(div);
+        });
+    }
+    openModal('modalSiteSelect');
+}
+
+/* --- [Request 5] 日期篩選重置 --- */
+function resetDateFilter() {
+    document.getElementById('wDateFilter').value = '';
+    renderWorkerList();
+}
+
+
+/* --- 師傅與邏輯 --- */
+function renderWorkerList() {
+    const wSearch = document.getElementById('wSearch').value.toLowerCase();
+    const dFilter = document.getElementById('wDateFilter').value;
+    
+    // [Request 5] 控制重置按鈕顯示
+    document.getElementById('btnDateReset').style.display = dFilter ? 'block' : 'none';
+
+    const list = document.getElementById('workerList');
+    list.innerHTML = "";
+    
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    
+    // Step 1: 先計算所有師傅的本月薪資
+    const allWorkersWithStats = db.workers.map(w => {
+        const monthSites = db.sites.filter(s => s.date.startsWith(ym) && s.workers.some(sw => sw.id === w.id));
+        let salary = 0;
+        monthSites.forEach(s => salary += Number(s.workers.find(sw => sw.id === w.id).snapshotRate));
+        const monthExtras = db.extras.filter(e => e.wid === w.id && e.date.startsWith(ym));
+        const extraSum = monthExtras.reduce((a,b) => a + Number(b.amount), 0);
+        
+        return {
+            ...w,
+            daysCount: monthSites.length,
+            totalPay: salary + extraSum
+        };
+    });
+    // 計算總薪資
+    const grandTotal = allWorkersWithStats.reduce((sum, w) => sum + w.totalPay, 0);
+    document.getElementById('totalExp').innerText = `$${grandTotal.toLocaleString()}`;
+
+    // Step 2: 排序與篩選
+    allWorkersWithStats.sort((a,b) => {
+        if (a.isTop !== b.isTop) return (b.isTop?1:0) - (a.isTop?1:0);
+        if (a.isDisabled !== b.isDisabled) return (a.isDisabled?1:0) - (b.isDisabled?1:0);
+        return b.daysCount - a.daysCount;
+    });
+    
+    let validWorkerIds = null;
+    
+    // 日期篩選
+    if(dFilter) {
+        validWorkerIds = db.sites
+            .filter(s => s.date === dFilter)
+            .flatMap(s => s.workers.map(w => w.id));
+    }
+    // [Request 4] 案場篩選
+    if(filterSiteName) {
+         const siteIds = db.sites
+            .filter(s => s.date.startsWith(ym) && s.name === filterSiteName)
+            .flatMap(s => s.workers.map(w => w.id));
+         
+         if(validWorkerIds) {
+             // 取交集
+             validWorkerIds = validWorkerIds.filter(id => siteIds.includes(id));
+         } else {
+             validWorkerIds = siteIds;
+         }
+    }
+
+    allWorkersWithStats.forEach(w => {
+        if(wSearch && !w.name.toLowerCase().includes(wSearch)) return;
+        if(validWorkerIds && !validWorkerIds.includes(w.id)) return;
+
+        const card = document.createElement('div');
+        card.className = 'worker-card card';
+        if(w.isDisabled) card.classList.add('disabled');
+        card.style.padding = '15px';
+        
+        const star = w.isTop ? '<svg class="icon-svg-sm" viewBox="0 0 24 24" style="fill:gold;color:gold"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> ' : '';
+        const nameText = w.isDisabled ? `${w.name} (隱藏)` : w.name;
+        
+        // [Request 4] 如果有篩選案場，標題加註
+        const tag = filterSiteName ? `<span style="font-size:0.75rem; background:var(--primary); color:white; padding:2px 6px; border-radius:4px; margin-left:5px;">${filterSiteName}</span>` : '';
+
+        card.innerHTML = `
+            <div><b>${star}${nameText}${tag}</b><div style="font-size:0.85rem;color:var(--text-sub);margin-top:4px">${w.daysCount} 天上工</div></div>
+            <div style="font-size:1.2rem;font-weight:800">$${w.totalPay.toLocaleString()}</div>
+        `;
+        card.onclick = () => openWorkerModal(w.id);
+        list.appendChild(card);
+    });
+}
+
+function openWorkerModal(id) {
+    editingExtraId = null;
+    document.getElementById('addExtraBox').style.display = 'none';
+    document.getElementById('btnAddExtraAction').innerText = "加入";
+    const w = id ?
+        db.workers.find(x => x.id === id) : { id:'', name:'', rate:'', isTop:false, phone:'', note:'', isDisabled: false };
+    document.getElementById('wId').value = w.id;
+    document.getElementById('wTop').checked = w.isTop;
+    document.getElementById('wName').value = w.name;
+    document.getElementById('wRate').value = w.rate;
+    document.getElementById('wPhone').value = w.phone;
+    document.getElementById('wNote').value = w.note;
+    const btnsDiv = document.getElementById('wActionBtns');
+    btnsDiv.style.display = id ? 'flex' : 'none';
+    if(id) {
+        document.getElementById('wStatsBlock').style.display = 'block';
+        document.getElementById('wExtraBlock').style.display = 'block';
+        const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+        const monthSites = db.sites.filter(s => s.date.startsWith(ym) && s.workers.some(sw => sw.id === w.id));
+        
+        const days = monthSites.map(s => parseInt(s.date.split('-')[2])).sort((a,b)=>a-b);
+        const daysStr = days.length > 0 ? days.join('日.') + '日' : '';
+        document.getElementById('wWorkDatesStr').innerText = daysStr;
+        let workPay = monthSites.reduce((acc, s) => acc + Number(s.workers.find(sw => sw.id === w.id).snapshotRate), 0);
+        const monthExtras = db.extras.filter(e => e.wid === w.id && e.date.startsWith(ym));
+        const extraSum = monthExtras.reduce((a,b) => a + Number(b.amount), 0);
+        document.getElementById('wWorkDays').innerText = monthSites.length;
+        document.getElementById('wWorkPay').innerText = workPay.toLocaleString();
+        document.getElementById('wExtraTotal').innerText = extraSum.toLocaleString();
+        document.getElementById('wFinalPay').innerText = (workPay + extraSum).toLocaleString();
+        
+        // [Request 3] 雜費分組邏輯
+        const exList = document.getElementById('wExtraList');
+        exList.innerHTML = "";
+        
+        // 依照名稱分組
+        const grouped = {};
+        monthExtras.forEach(ex => {
+            if(!grouped[ex.name]) grouped[ex.name] = { count:0, total:0, name: ex.name };
+            grouped[ex.name].count++;
+            grouped[ex.name].total += parseInt(ex.amount);
+        });
+        
+        Object.values(grouped).forEach(g => {
+             exList.innerHTML += `
+                <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:5px;align-items:center; border-bottom:1px dashed var(--border); padding:8px 0; cursor:pointer" onclick="openExtraDetail('${w.id}', '${g.name}')">
+                    <span>${g.name} <span style="font-size:0.8em;color:var(--text-sub)">(${g.count}筆)</span></span>
+                    <span style="font-weight:bold">$${g.total} ></span>
+                </div>`;
+        });
+        
+        const btnHide = btnsDiv.children[0];
+        if(w.isDisabled) {
+            btnHide.innerText = "取消隱藏";
+            btnHide.className = "btn btn-unhide";
+        } else {
+            btnHide.innerText = "隱藏";
+            btnHide.className = "btn btn-hide";
+        }
+
+    } else {
+        document.getElementById('wStatsBlock').style.display = 'none';
+        document.getElementById('wExtraBlock').style.display = 'none';
+    }
+    openModal('modalWorker');
+}
+
+/* --- [Request 2] 個人上工日曆 --- */
+function openPersonalCalendar(wid) {
+    if(!wid) return;
+    const w = db.workers.find(x => x.id === wid);
+    if(!w) return;
+    
+    document.getElementById('pcTitle').innerText = `${curDate.getFullYear()}年${curDate.getMonth()+1}月 - ${w.name}`;
+    const list = document.getElementById('pcList');
+    list.innerHTML = "";
+    
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const daysInM = new Date(curDate.getFullYear(), curDate.getMonth()+1, 0).getDate();
+    
+    // 取得該月所有相關資料
+    const monthSites = db.sites.filter(s => s.date.startsWith(ym) && s.workers.some(sw => sw.id === wid));
+    const monthExtras = db.extras.filter(e => e.wid === wid && e.date.startsWith(ym));
+    
+    // 產生每一天的資料
+    let hasData = false;
+    for(let d=1; d<=daysInM; d++) {
+        const dateStr = `${ym}-${String(d).padStart(2,'0')}`;
+        const daySites = monthSites.filter(s => s.date === dateStr);
+        const dayExtras = monthExtras.filter(e => e.date === dateStr);
+        
+        if(daySites.length === 0 && dayExtras.length === 0) continue;
+        hasData = true;
+        
+        let contentHtml = "";
+        
+        // 案場資訊
+        daySites.forEach(s => {
+            const sw = s.workers.find(x => x.id === wid);
+            contentHtml += `<div class="p-cal-site"><b>${s.name}</b> <span style="color:var(--text-sub)">($${sw.snapshotRate})</span></div>`;
+        });
+        
+        // 雜費資訊
+        dayExtras.forEach(e => {
+             contentHtml += `<div class="p-cal-extra">雜費: ${e.name} $${e.amount}</div>`;
+        });
+        
+        const row = document.createElement('div');
+        row.className = 'p-cal-row';
+        row.innerHTML = `
+            <div class="p-cal-date">${d}<span style="font-size:0.7em;font-weight:normal">日</span></div>
+            <div class="p-cal-content">${contentHtml}</div>
+        `;
+        list.appendChild(row);
+    }
+    
+    if(!hasData) list.innerHTML = "<div style='text-align:center;padding:20px;color:var(--text-sub)'>本月無上工記錄</div>";
+    
+    openModal('modalPersonalCal');
+}
+
+/* --- [Request 3] 雜費細項列表 --- */
+function openExtraDetail(wid, extraName) {
+    const w = db.workers.find(x => x.id === wid);
+    document.getElementById('edTitle').innerText = `雜費細項: ${extraName}`;
+    
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const items = db.extras.filter(e => e.wid === wid && e.date.startsWith(ym) && e.name === extraName);
+    
+    const list = document.getElementById('edList');
+    list.innerHTML = "";
+    
+    items.forEach(ex => {
+         list.innerHTML += `
+            <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:5px">
+                <span style="cursor:pointer;flex:1" onclick="editExtraFromDetail('${ex.id}', '${wid}')">
+                    ${ex.date.slice(5)} <span style="font-size:0.8em;color:var(--primary)">✎ 編輯</span>
+                </span>
+                <span>$${ex.amount} <span style="color:var(--danger);cursor:pointer;margin-left:8px" onclick="delExtraFromDetail('${ex.id}','${wid}','${extraName}')">✕</span></span>
+            </div>`;
+    });
+    
+    openModal('modalExtraDetail');
+}
+
+// 從細項介面編輯 (回填到主介面編輯框)
+function editExtraFromDetail(eid, wid) {
+    closeModal('modalExtraDetail');
+    editExtra(eid); // 呼叫原本的編輯函式
+}
+
+// 從細項介面刪除
+function delExtraFromDetail(eid, wid, extraName) {
+    if(confirm('刪除？')) { 
+        db.extras = db.extras.filter(e => e.id !== eid);
+        saveDB();
+        // 重新渲染細項列表，若空了則關閉
+        const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+        const remaining = db.extras.filter(e => e.wid === wid && e.date.startsWith(ym) && e.name === extraName);
+        if(remaining.length === 0) {
+            closeModal('modalExtraDetail');
+            openWorkerModal(wid); // 重新渲染主介面
+        } else {
+            openExtraDetail(wid, extraName); // 重新渲染細項
+            // 同步更新背後的主介面數據 (雖然被蓋住)
+            // 這裡簡單處理：關閉細項後再開主介面會刷新，或者手動操作 DOM
+        }
+    }
+}
+
+
+function saveWorker() {
+    const id = document.getElementById('wId').value;
+    const name = document.getElementById('wName').value;
+    
+    if(!name) return alert('請輸入姓名');
+
+    const data = {
+        name: name,
+        rate: document.getElementById('wRate').value,
+        isTop: document.getElementById('wTop').checked,
+        phone: document.getElementById('wPhone').value,
+        note: document.getElementById('wNote').value
+    };
+    if(id) {
+        const idx = db.workers.findIndex(x => x.id === id);
+        db.workers[idx] = { ...db.workers[idx], ...data };
+    } else {
+        db.workers.push({
+            id: 'w'+Date.now(),
+            ...data,
+            isDisabled: false
+        });
+    }
+    
+    saveDB();
+    closeModal('modalWorker'); renderWorkerList();
+}
+
+function toggleHideWorker() {
+    const id = document.getElementById('wId').value;
+    const w = db.workers.find(x => x.id === id);
+    if(w) {
+        w.isDisabled = !w.isDisabled;
+        if(w.isDisabled) {
+            w.isTop = false;
+        }
+        saveDB();
+        closeModal('modalWorker');
+        renderWorkerList();
+    }
+}
+
+function hardDeleteWorker() {
+    if(confirm('警告：確定刪除？這將會清除該師傅的所有歷史紀錄且無法復原！')) {
+        const id = document.getElementById('wId').value;
+        db.workers = db.workers.filter(x => x.id !== id);
+        db.sites.forEach(s => {
+            s.workers = s.workers.filter(sw => sw.id !== id);
+        });
+        db.extras = db.extras.filter(e => e.wid !== id);
+        saveDB();
+        closeModal('modalWorker');
+        renderWorkerList();
+    }
+}
+
+/* --- 雜費 & 多人雜費 --- */
+function toggleAddExtra() {
+    const box = document.getElementById('addExtraBox');
+    const isHidden = box.style.display === 'none';
+    box.style.display = isHidden ? 'block' : 'none';
+    if(isHidden) {
+        editingExtraId = null;
+        document.getElementById('exDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('exName').value = '';
+        document.getElementById('exAmt').value = '';
+        document.getElementById('btnAddExtraAction').innerText = "加入";
+    }
+}
+
+function editExtra(eid) {
+    const ex = db.extras.find(e => e.id === eid);
+    if(!ex) return;
+    document.getElementById('addExtraBox').style.display = 'block';
+    document.getElementById('exDate').value = ex.date;
+    document.getElementById('exName').value = ex.name;
+    document.getElementById('exAmt').value = ex.amount;
+    editingExtraId = eid;
+    document.getElementById('btnAddExtraAction').innerText = "更新";
+}
+
+function saveOneExtra() {
+    const wid = document.getElementById('wId').value;
+    const date = document.getElementById('exDate').value;
+    const name = document.getElementById('exName').value;
+    const amount = document.getElementById('exAmt').value;
+    if(!name || !amount) return alert('資料不完整');
+
+    if (editingExtraId) {
+        const idx = db.extras.findIndex(e => e.id === editingExtraId);
+        if(idx !== -1) db.extras[idx] = { ...db.extras[idx], date, name, amount };
+        editingExtraId = null;
+    } else {
+        db.extras.push({ id:'e'+Date.now(), wid, date, name, amount });
+    }
+    saveDB(); openWorkerModal(wid);
+}
+
+function delExtra(eid, wid) {
+    if(confirm('刪除？')) { db.extras = db.extras.filter(e => e.id !== eid);
+    saveDB(); openWorkerModal(wid); }
+}
+
+function openMultiExtra() {
+    document.getElementById('meDate').value = new Date().toISOString().split('T')[0];
+    renderMeList();
+    openModal('modalMultiExtra');
+}
+function renderMeList() {
+    const filter = document.getElementById('meFilter').value.toLowerCase();
+    const list = document.getElementById('meList');
+    list.innerHTML = "";
+    // 與師傅名單相同的排序邏輯
+    const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
+    const workersWithStats = db.workers.map(w => {
+        const monthSites = db.sites.filter(s => s.date.startsWith(ym) && s.workers.some(sw => sw.id === w.id));
+        return { ...w, daysCount: monthSites.length };
+    });
+    workersWithStats.sort((a,b) => {
+        if (a.isTop !== b.isTop) return (b.isTop?1:0) - (a.isTop?1:0);
+        if (a.isDisabled !== b.isDisabled) return (a.isDisabled?1:0) - (b.isDisabled?1:0);
+        return b.daysCount - a.daysCount;
+    });
+    workersWithStats.forEach(w => {
+        // 不再跳過 isDisabled，改為顯示灰色
+        if(w.name.toLowerCase().includes(filter)) {
+            const div = document.createElement('div'); div.className = 'chk-row';
+            if(w.isDisabled) div.classList.add('disabled-row');
+            const nameDisplay = w.isDisabled ? `${w.name} (隱藏)` : w.name;
+            div.innerHTML = `<span>${nameDisplay}</span> <input type="checkbox" class="me-chk" value="${w.id}">`;
+            list.appendChild(div);
+        }
+    });
+}
+function saveMultiExtra() {
+    const date = document.getElementById('meDate').value;
+    const name = document.getElementById('meName').value;
+    const amt = document.getElementById('meAmt').value;
+    const chks = document.querySelectorAll('.me-chk:checked');
+    if(!name || !amt || chks.length === 0) return alert('資料不完整');
+    chks.forEach(c => db.extras.push({ id:'e'+Date.now()+Math.random(), wid: c.value, date, name, amount: amt }));
+    saveDB(); closeModal('modalMultiExtra'); renderWorkerList();
+}
+
+/* --- 系統設定 --- */
+function renderThemeGrid() {
+    const box = document.getElementById('themeBox');
+    box.innerHTML = "";
+    THEMES.forEach((t, i) => {
+        const dot = document.createElement('div');
+        dot.className = `theme-dot ${db.settings.theme === i ? 'active' : ''}`;
+        dot.style.background = t.hex;
+        dot.onclick = () => { 
+            db.settings.theme = i; saveDB(); applyTheme(i); renderThemeGrid(); renderSiteColorBox(); 
+            if(document.getElementById('tab-cal').classList.contains('active')) switchPage('cal');
+        };
+        box.appendChild(dot);
+    });
+}
+function renderSiteColorBox(selectedIdx = 0) {
+    const box = document.getElementById('sColorBox');
+    box.innerHTML = "";
+    THEMES.forEach((t, i) => {
+        const dot = document.createElement('div');
+        dot.className = `theme-dot ${selectedIdx === i ? 'active' : ''}`;
+        dot.style.background = t.hex;
+        dot.dataset.idx = i;
+        dot.onclick = () => { 
+            box.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active')); 
+            dot.classList.add('active'); 
+        };
+        box.appendChild(dot);
+    });
+}
+function applyTheme(i) {
+    const t = THEMES[i] || THEMES[0];
+    const r = document.documentElement.style;
+    r.setProperty('--theme-r', t.r); r.setProperty('--theme-g', t.g);
+    r.setProperty('--theme-b', t.b);
+}
+function toggleGasLock() {
+    const isLocked = document.getElementById('gasLock').checked;
+    const inp = document.getElementById('gasUrl');
+    if(isLocked) { inp.style.background='var(--bg-std)'; inp.disabled=true;
+    }
+    else { if(db.settings.gasLock && !confirm('解除鎖定？')) { document.getElementById('gasLock').checked=true; return; } inp.style.background='var(--bg-card)'; inp.disabled=false;
+    }
+    db.settings.gasLock = isLocked; db.settings.gasUrl = inp.value; saveDB();
+}
+function masterReset() {
+    if(confirm('警告：清除所有資料？')) { localStorage.removeItem('ENG_LEDGER_FINAL_V7');
+    location.reload(); }
+}
+
+/* --- Modal Helper --- */
+function openModal(id) {
+    const m = document.getElementById(id);
+    m.style.display = 'flex';
+    setTimeout(() => m.style.opacity = 1, 10);
+}
+function closeModal(id) {
+    if(!id) document.querySelectorAll('.overlay').forEach(o => { o.style.opacity=0; setTimeout(()=>o.style.display='none',200); });
+    else { const m = document.getElementById(id); m.style.opacity=0; setTimeout(()=>m.style.display='none',200); }
+}
+function switchPage(pid) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-'+pid).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('nav-'+pid).classList.add('active');
+    
+    if(pid === 'cal') {
+        const t = THEMES[db.settings.theme];
+        const themeRgba = `rgba(${t.r},${t.g},${t.b},0.4)`;
+        const baseColor = db.settings.darkMode ? '#000000' : '#FFFFFF';
+        document.body.style.background = `linear-gradient(${themeRgba}, ${themeRgba}), ${baseColor}`;
+        
+        renderCalendar();
+    } else {
+        document.body.style.background = 'var(--bg-std)';
+        if(pid === 'work') renderWorkerList();
+        if(pid === 'set') renderThemeGrid();
+    }
+}
+</script>
+</body>
+</html>
