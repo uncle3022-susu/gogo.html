@@ -363,19 +363,20 @@
                     </div>
                 </div>
                 
-                <div style="display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); padding-top:10px; position:relative;">
-                    <svg class="icon-svg" style="color:var(--text-sub)" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    
-                    <div style="flex:1; position:relative; height:40px;">
-                        <input type="date" id="wDateFilter" class="input-f" 
-                               style="margin:0; border:none; background:transparent; padding:0; width:100%; height:100%; position:absolute; top:0; left:0;" 
-                               onchange="renderWorkerList()">
-                    </div>
+                <div style="display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); padding-top:10px; position:relative; height:50px;">
+    
+                <svg class="icon-svg" style="color:var(--text-sub); flex-shrink:0" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    
+                <span id="dateDisplayText" style="color:var(--text-disabled); font-size:16px; flex:1;">點擊篩選日期...</span>
 
-                    <div id="btnDateReset" onclick="resetDateFilter()" style="display:none; padding:5px; cursor:pointer; color:var(--text-sub);">
-                        <svg class="icon-svg-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </div>
+                <input type="date" id="wDateFilter" 
+                       style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; z-index:10;" 
+                       onchange="updateDateDisplay(); renderWorkerList()">
+
+                <div id="btnDateReset" onclick="resetDateFilter()" style="display:none; padding:5px; cursor:pointer; color:var(--text-sub); z-index:20;">
+                    <svg class="icon-svg-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </div>
+            </div>
                 
                 <div style="height:1px; background:var(--border); margin:10px 0;"></div>
                 <button class="btn" style="margin-top:0" onclick="openWorkerModal()">+ 新增師傅</button>
@@ -1179,7 +1180,32 @@ function resetDateFilter() {
     document.getElementById('wDateFilter').value = '';
     renderWorkerList();
 }
+// --- 日期顯示優化 ---
+function updateDateDisplay() {
+    const input = document.getElementById('wDateFilter');
+    const display = document.getElementById('dateDisplayText');
+    
+    if (input.value) {
+        // 有選日期：顯示日期，文字變深色
+        display.innerText = input.value;
+        display.style.color = 'var(--text-main)';
+        display.style.fontWeight = 'bold';
+    } else {
+        // 沒選日期：顯示提示，文字變灰色
+        display.innerText = '點擊篩選日期...';
+        display.style.color = 'var(--text-disabled)';
+        display.style.fontWeight = 'normal';
+    }
+}
 
+// 覆寫原本的重置函式，加入更新文字的步驟
+const oldResetDateFilter = resetDateFilter; // 避免重複定義錯誤，或者您可以直接修改原有的 resetDateFilter
+resetDateFilter = function() {
+    document.getElementById('wDateFilter').value = '';
+    updateDateDisplay(); // 更新文字回「點擊篩選日期...」
+    renderWorkerList();
+}
+    
 
 /* --- 師傅與邏輯 --- */
 function renderWorkerList() {
